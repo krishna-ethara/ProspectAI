@@ -21,7 +21,7 @@ from sqlalchemy.pool import StaticPool
 from tavily import TavilyClient
 
 
-load_dotenv(Path(__file__).with_name(".env"))
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./prospectai.db")
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine_options = {"poolclass": StaticPool} if DATABASE_URL in {"sqlite://", "sqlite:///:memory:"} else {}
@@ -137,6 +137,32 @@ def require_env(name: str) -> str:
     return value
 
 
+def provider_http_exception(provider: str, key_name: str, exc: Exception) -> HTTPException:
+    response = getattr(exc, "response", None)
+    status_code = getattr(exc, "status_code", None) or getattr(response, "status_code", None)
+    try:
+        status_code = int(status_code) if status_code is not None else None
+    except (TypeError, ValueError):
+        status_code = None
+
+    if status_code == 429:
+        return HTTPException(
+            status_code=429,
+            detail=f"{provider} rate limit or quota reached. Check provider account limits and try again.",
+        )
+    if status_code in {401, 403}:
+        return HTTPException(
+            status_code=502,
+            detail=f"{provider} rejected configured credentials or access. Check {key_name} and provider permissions.",
+        )
+    if status_code is not None:
+        return HTTPException(status_code=502, detail=f"{provider} request failed with provider HTTP {status_code}.")
+    return HTTPException(
+        status_code=502,
+        detail=f"{provider} request failed. Check provider availability and configuration.",
+    )
+
+
 def priority_for(score: int) -> str:
     if score >= 70:
         return "High"
@@ -186,7 +212,7 @@ def research(request: SearchRequest, db: DbSession):
             include_answer=False,
         ).get("results", [])
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"Web research failed: {exc}") from exc
+        raise provider_http_exception("Web research", "TAVILY_API_KEY", exc) from exc
 
     if not results:
         return []
@@ -257,7 +283,7 @@ Only include source URLs exactly as supplied. Do not invent facts, contact detai
         raise
     except Exception as exc:
         db.rollback()
-        raise HTTPException(status_code=502, detail=f"AI analysis failed: {exc}") from exc
+        raise provider_http_exception("AI analysis", "OPENAI_API_KEY", exc) from exc
 
 
 @app.get("/api/leads", response_model=list[LeadOut])
@@ -323,7 +349,7 @@ def generate_outreach(lead_id: int, db: DbSession):
         return LeadOut.from_lead(lead)
     except Exception as exc:
         db.rollback()
-        raise HTTPException(status_code=502, detail=f"Outreach generation failed: {exc}") from exc
+        raise provider_http_exception("Outreach generation", "OPENAI_API_KEY", exc) from exc
 
 
 @app.put("/api/leads/{lead_id}/outreach", response_model=LeadOut)
