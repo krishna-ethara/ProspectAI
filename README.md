@@ -74,3 +74,5 @@ Tests check validation, missing-integration handling, lead-score priority thresh
 Deploy the API as a Python web service with `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`, set provider keys and `CORS_ORIGINS`, and attach persistent storage or configure a managed database. Build the frontend with `npm run build` and publish `dist/` as a static site. Set `VITE_API_URL` at build time.
 
 The GitHub Pages workflow publishes a frontend-only preview with no sample leads and no API connection. Live research, scoring, and outreach require a separately deployed API with valid provider credentials.
+
+The backend can be deployed as a Docker service on Railway using the root `Dockerfile`. Set `OPENAI_API_KEY`, `TAVILY_API_KEY`, and `CORS_ORIGINS` as service variables; never commit them. Configure `/api/health` as the health check. The default SQLite database is ephemeral on hosted containers, so configure persistent storage or a managed database before relying on saved prospects.
