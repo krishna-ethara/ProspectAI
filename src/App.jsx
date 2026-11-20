@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const PREVIEW_ONLY = import.meta.env.VITE_PREVIEW_ONLY === "true";
 const initials = (name = "") => name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
 const colors = ["#dbeafe", "#fce7d5", "#e7e4ff", "#d9f3e5", "#f7e1e9", "#dff0f4"];
 
@@ -38,6 +39,14 @@ function App() {
   const [notice, setNotice] = useState("");
 
   const refresh = useCallback(async () => {
+    if (PREVIEW_ONLY) {
+      setDashboard(null);
+      setLeads([]);
+      setConfig({ tavily: false, openai: false });
+      setLoading(false);
+      setError("");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
@@ -60,6 +69,14 @@ function App() {
   const showNotice = (message) => {
     setNotice(message);
     window.setTimeout(() => setNotice(""), 3800);
+  };
+
+  const openResearch = () => {
+    if (PREVIEW_ONLY) {
+      showNotice("Live research is unavailable in this frontend-only preview.");
+      return;
+    }
+    setSearchOpen(true);
   };
 
   const runResearch = async (form) => {
@@ -105,10 +122,11 @@ function App() {
     } catch (reason) { setError(reason.message); }
   };
 
-  const stats = dashboard || { total_researched: 0, qualified_leads: 0, high_priority: 0, average_score: 0, recent_activity: [] };
+  const emptyValue = PREVIEW_ONLY ? "—" : 0;
+  const stats = dashboard || { total_researched: emptyValue, qualified_leads: emptyValue, high_priority: emptyValue, average_score: emptyValue, recent_activity: [] };
   const nav = [
     { group: "WORKSPACE", items: [{ title: "Overview", icon: LayoutDashboard }, { title: "Prospects", icon: Users }] },
-    { group: "TOOLS", items: [{ title: "Research", icon: FileSearch, action: () => setSearchOpen(true) }, { title: "Outreach", icon: Mail }] },
+    { group: "TOOLS", items: [{ title: "Research", icon: FileSearch, action: openResearch }, { title: "Outreach", icon: Mail }] },
   ];
 
   return (
@@ -121,8 +139,8 @@ function App() {
             <button key={title} className={`nav-item ${page === title ? "active" : ""}`} onClick={() => action ? action() : setPage(title)}><Icon size={17} /><span>{title}</span>{title === "Prospects" && leads.length > 0 && <span className="nav-count">{leads.length}</span>}</button>)}</div>)}
         </div>
         <div className="sidebar-bottom">
-          <div className={`connection-card ${config.tavily && config.openai ? "connected" : ""}`}><span className="connection-dot" /><div><b>{config.tavily && config.openai ? "Research ready" : "Setup required"}</b><small>{config.tavily && config.openai ? "Search & AI connected" : "Add API keys to begin"}</small></div><Settings2 size={15} /></div>
-          <button className="nav-item muted" onClick={() => showNotice("API keys are configured in backend/.env")}><Settings2 size={17} /><span>Settings</span></button>
+          <div className={`connection-card ${config.tavily && config.openai ? "connected" : ""}`}><span className="connection-dot" /><div><b>{PREVIEW_ONLY ? "Frontend preview" : config.tavily && config.openai ? "Research ready" : "Setup required"}</b><small>{PREVIEW_ONLY ? "Backend is not deployed" : config.tavily && config.openai ? "Search & AI connected" : "Add API keys to begin"}</small></div><Settings2 size={15} /></div>
+          <button className="nav-item muted" onClick={() => showNotice(PREVIEW_ONLY ? "The API backend is not part of this preview." : "API keys are configured in backend/.env")}><Settings2 size={17} /><span>Settings</span></button>
           <div className="user-profile"><div className="profile-avatar">K</div><div className="profile-copy"><b>Krishna</b><small>Free plan</small></div><MoreHorizontal size={18} /></div>
         </div>
       </aside>
@@ -130,9 +148,10 @@ function App() {
       <main className="main-area">
         <header className="topbar"><div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><b>{page}</b></div><div className="top-actions"><div className="today-date"><span className="live-dot" /> Research workspace</div><button className="icon-btn" aria-label="Notifications" onClick={() => showNotice("You're all caught up")}><Bell size={17} /></button><div className="top-avatar">K</div></div></header>
         <div className="page-content">
+          {PREVIEW_ONLY && <div className="preview-notice" role="status"><b>Frontend preview only</b><span>The API backend and live AI research are not deployed here. No sample leads or research results are shown.</span></div>}
           {error && <div className="alert"><CircleHelp size={17} /><span>{error}</span><button aria-label="Dismiss error" onClick={() => setError("")}><X size={16} /></button></div>}
-          {page === "Overview" ? <Overview stats={stats} leads={leads} loading={loading} onResearch={() => setSearchOpen(true)} onOpen={(lead) => setSelected(lead)} onViewAll={() => setPage("Prospects")} /> :
-            <Prospects leads={leads} loading={loading} query={query} setQuery={setQuery} priority={priorityFilter} setPriority={setPriorityFilter} onResearch={() => setSearchOpen(true)} onOpen={(lead) => setSelected(lead)} onStatus={updateStatus} />}
+          {page === "Overview" ? <Overview stats={stats} leads={leads} loading={loading} previewOnly={PREVIEW_ONLY} onResearch={openResearch} onOpen={(lead) => setSelected(lead)} onViewAll={() => setPage("Prospects")} /> :
+            <Prospects leads={leads} loading={loading} query={query} setQuery={setQuery} priority={priorityFilter} setPriority={setPriorityFilter} previewOnly={PREVIEW_ONLY} onResearch={openResearch} onOpen={(lead) => setSelected(lead)} onStatus={updateStatus} />}
           <footer className="app-footer"><span>ProspectAI <span className="footer-dot">·</span> Built for better conversations</span><span>Research responsibly <CircleHelp size={13} /></span></footer>
         </div>
       </main>
@@ -149,7 +168,7 @@ function App() {
   );
 }
 
-function Overview({ stats, leads, loading, onResearch, onOpen, onViewAll }) {
+function Overview({ stats, leads, loading, previewOnly, onResearch, onOpen, onViewAll }) {
   const cards = [
     { title: "Businesses researched", value: stats.total_researched, note: "Across your workspace", icon: Building2, accent: "violet", trend: "Your research library" },
     { title: "Qualified leads", value: stats.qualified_leads, note: "Marked as qualified", icon: BadgeCheck, accent: "green", trend: "Ready for next steps" },
@@ -162,16 +181,16 @@ function Overview({ stats, leads, loading, onResearch, onOpen, onViewAll }) {
     <div className="section-heading"><div><h2>Recent prospects</h2><p>Your latest researched businesses, all in one place.</p></div><button className="text-button" onClick={onViewAll}>View all prospects <ArrowUpRight size={15} /></button></div>
     <div className="table-card"><div className="table-scroll"><table><thead><tr><th>BUSINESS</th><th>INDUSTRY</th><th>LOCATION</th><th>LEAD SCORE</th><th>STATUS</th><th /></tr></thead><tbody>
       {loading ? [1, 2, 3].map((item) => <tr key={item}><td colSpan="6"><span className="skeleton row-skeleton" /></td></tr>) : leads.slice(0, 5).map((lead, index) => <LeadRow key={lead.id} lead={lead} index={index} onClick={() => onOpen(lead)} />)}
-      {!loading && leads.length === 0 && <tr><td colSpan="6"><EmptyState onResearch={onResearch} /></td></tr>}
+      {!loading && leads.length === 0 && <tr><td colSpan="6"><EmptyState previewOnly={previewOnly} onResearch={onResearch} /></td></tr>}
     </tbody></table></div><div className="table-footer"><span>Showing <b>{Math.min(leads.length, 5)}</b> of <b>{leads.length}</b> researched businesses</span><div className="pagination"><button disabled><ChevronLeft size={15} /></button><button className="current-page">1</button><button disabled><ChevronRight size={15} /></button></div></div></div>
     <div className="insight-banner"><div className="insight-icon"><Sparkles size={18} /></div><div><b>Better research. More relevant conversations.</b><p>Every lead comes with source links, a transparent score, and AI-assisted notes for your review.</p></div><button className="insight-link" onClick={onResearch}>Research a business <ArrowUpRight size={15} /></button></div>
   </div>;
 }
 
-function Prospects({ leads, loading, query, setQuery, priority, setPriority, onResearch, onOpen, onStatus }) {
+function Prospects({ leads, loading, query, setQuery, priority, setPriority, previewOnly, onResearch, onOpen, onStatus }) {
   return <div className="page-enter"><div className="welcome-row prospects-heading"><div><div className="eyebrow"><span className="eyebrow-dot" /> LEAD MANAGEMENT</div><h1>Your prospects</h1><p className="page-subtitle">A considered list of businesses worth getting to know.</p></div><button className="primary-btn" onClick={onResearch}><Plus size={17} /> Find prospects</button></div>
-    <div className="toolbar"><div className="search-field"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search businesses..." /></div><label className="filter-field"><Filter size={15} /><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="">All priorities</option><option>High</option><option>Medium</option><option>Low</option></select><ChevronDown size={14} /></label><a className="outline-btn export-btn" href={`${API}/api/leads.csv`}><Download size={15} /> Export CSV</a></div>
-    <div className="table-card prospects-table"><div className="table-scroll"><table><thead><tr><th>BUSINESS</th><th>INDUSTRY</th><th>LOCATION</th><th>LEAD SCORE</th><th>STATUS</th><th /></tr></thead><tbody>{loading ? [1, 2, 3].map((item) => <tr key={item}><td colSpan="6"><span className="skeleton row-skeleton" /></td></tr>) : leads.map((lead, index) => <LeadRow key={lead.id} lead={lead} index={index} onClick={() => onOpen(lead)} onStatus={onStatus} />)}{!loading && leads.length === 0 && <tr><td colSpan="6"><EmptyState onResearch={onResearch} /></td></tr>}</tbody></table></div><div className="table-footer"><span>{leads.length} {leads.length === 1 ? "prospect" : "prospects"}</span><div className="pagination"><button disabled><ChevronLeft size={15} /></button><button className="current-page">1</button><button disabled><ChevronRight size={15} /></button></div></div></div>
+    <div className="toolbar"><div className="search-field"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search businesses..." /></div><label className="filter-field"><Filter size={15} /><select value={priority} onChange={(event) => setPriority(event.target.value)}><option value="">All priorities</option><option>High</option><option>Medium</option><option>Low</option></select><ChevronDown size={14} /></label>{!previewOnly && <a className="outline-btn export-btn" href={`${API}/api/leads.csv`}><Download size={15} /> Export CSV</a>}</div>
+    <div className="table-card prospects-table"><div className="table-scroll"><table><thead><tr><th>BUSINESS</th><th>INDUSTRY</th><th>LOCATION</th><th>LEAD SCORE</th><th>STATUS</th><th /></tr></thead><tbody>{loading ? [1, 2, 3].map((item) => <tr key={item}><td colSpan="6"><span className="skeleton row-skeleton" /></td></tr>) : leads.map((lead, index) => <LeadRow key={lead.id} lead={lead} index={index} onClick={() => onOpen(lead)} onStatus={onStatus} />)}{!loading && leads.length === 0 && <tr><td colSpan="6"><EmptyState previewOnly={previewOnly} onResearch={onResearch} /></td></tr>}</tbody></table></div><div className="table-footer"><span>{leads.length} {leads.length === 1 ? "prospect" : "prospects"}</span><div className="pagination"><button disabled><ChevronLeft size={15} /></button><button className="current-page">1</button><button disabled><ChevronRight size={15} /></button></div></div></div>
   </div>;
 }
 
@@ -183,8 +202,8 @@ function StatusPill({ status }) {
   return <span className={`status-pill ${status.toLowerCase()}`}><span />{status}</span>;
 }
 
-function EmptyState({ onResearch }) {
-  return <div className="empty-state"><div className="empty-icon"><FileSearch size={22} /></div><b>No prospects yet</b><span>Search public web sources to find and evaluate potential customers.</span><button className="outline-btn" onClick={onResearch}><Plus size={15} /> Start researching</button></div>;
+function EmptyState({ previewOnly, onResearch }) {
+  return <div className="empty-state"><div className="empty-icon"><FileSearch size={22} /></div><b>{previewOnly ? "Live data unavailable" : "No prospects yet"}</b><span>{previewOnly ? "This frontend-only preview does not include company data or research results." : "Search public web sources to find and evaluate potential customers."}</span>{!previewOnly && <button className="outline-btn" onClick={onResearch}><Plus size={15} /> Start researching</button>}</div>;
 }
 
 function ResearchModal({ onClose, onSubmit, busy }) {

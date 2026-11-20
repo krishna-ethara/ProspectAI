@@ -72,3 +72,5 @@ Tests check validation, missing-integration handling, lead-score priority thresh
 ## Deployment
 
 Deploy the API as a Python web service with `uvicorn backend.main:app --host 0.0.0.0 --port $PORT`, set provider keys and `CORS_ORIGINS`, and attach persistent storage or configure a managed database. Build the frontend with `npm run build` and publish `dist/` as a static site. Set `VITE_API_URL` at build time.
+
+The GitHub Pages workflow publishes a frontend-only preview with no sample leads and no API connection. Live research, scoring, and outreach require a separately deployed API with valid provider credentials.

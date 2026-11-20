@@ -1,0 +1,16 @@
+.preview-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 24px;
+  padding: 14px 18px;
+  border: 1px solid #d8d2ff;
+  border-radius: 12px;
+  background: #f3f1ff;
+  color: #5143b5;
+  font-size: 13px;
+}
+
+.preview-notice span {
+  color: #696581;
+}
